@@ -47,6 +47,22 @@ export interface ChatMensaje {
   created_at: string;
 }
 
+export interface Declaracion {
+  id: string;
+  empresa_id: string;
+  usuario_id: string;
+  tipo: string;
+  periodo_mes: number | null;
+  periodo_anio: number | null;
+  fecha_envio: string | null;
+  fecha_vencimiento: string | null;
+  estado: string;
+  numero_confirmacion: string | null;
+  monto_declarado: number | null;
+  notas: string | null;
+  created_at: string;
+}
+
 // Alias para compatibilidad con componentes de chat
 export type Message = {
   role: "user" | "assistant";

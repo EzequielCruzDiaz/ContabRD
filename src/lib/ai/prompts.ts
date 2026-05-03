@@ -20,7 +20,7 @@ Cuando analices una factura devuelve ÚNICAMENTE este JSON sin texto adicional:
   "total": número o null,
   "retencion_itbis": número o null,
   "retencion_isr": número o null,
-  "asiento_contable": "asiento contable sugerido en texto"
+  "asiento_contable": [{"cuenta": "código nombre", "debito": número_o_null, "credito": número_o_null}]
 }
 
 Para preguntas generales responde en máximo 200 palabras.`;

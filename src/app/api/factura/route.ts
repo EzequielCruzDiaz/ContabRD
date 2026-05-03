@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
     .from("facturas")
     .insert({
       ...datos,
+      asiento_contable: Array.isArray(datos.asiento_contable)
+        ? JSON.stringify(datos.asiento_contable)
+        : datos.asiento_contable,
       empresa_id: profile?.empresa_id,
       usuario_id: user.id,
       archivo_url: urlData.publicUrl,

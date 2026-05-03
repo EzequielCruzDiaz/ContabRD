@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
+import ExportButtons from "@/components/reportes/ExportButtons";
+import CashflowDownloadBtn from "@/components/reportes/CashflowDownloadBtn";
+import MonthlySummary from "@/components/reportes/MonthlySummary";
 
 const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -45,11 +48,6 @@ export default async function ReportesPage() {
     .reduce((s, f) => s + (f.total ?? 0), 0);
 
   const maxMonthTotal = Math.max(...monthlyData.map((m) => m.total), 1);
-
-  const last3Months = monthlyData
-    .filter((m) => m.total > 0)
-    .slice(-3)
-    .reverse();
 
   const currentMonth = new Date().toLocaleDateString("es-DO", { month: "long", year: "numeric" });
 
@@ -176,40 +174,7 @@ export default async function ReportesPage() {
         </div>
 
         {/* Monthly Summary — 6 cols */}
-        <div className="col-span-12 lg:col-span-6 bg-surface-low rounded-(--radius-card) p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-display text-lg font-bold text-primary">
-              Resumen Mensual: Ingresos vs Gastos
-            </h3>
-            <button type="button" className="text-sm font-semibold text-primary hover:underline underline-offset-4">
-              Ver todo →
-            </button>
-          </div>
-          <div className="space-y-3">
-            {last3Months.length > 0 ? last3Months.map((m) => {
-              const gastoPct = m.total > 0 ? Math.round((m.itbis / m.total) * 100) : 0;
-              const netoPct  = 100 - gastoPct;
-              return (
-                <div key={m.mes} className="bg-surface-lowest p-4 rounded-xl">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-bold text-primary">{m.mes}</span>
-                    <span className="text-on-surface-muted">
-                      Neto: <span className="text-success font-bold">{formatCurrency(m.total - m.itbis)}</span>
-                    </span>
-                  </div>
-                  <div className="h-2 w-full bg-surface-high rounded-full overflow-hidden flex">
-                    <div className="h-full bg-primary rounded-l-full" style={{ width: `${netoPct}%` }} />
-                    <div className="h-full bg-warning rounded-r-full" style={{ width: `${gastoPct}%` }} />
-                  </div>
-                </div>
-              );
-            }) : (
-              <div className="text-center py-8 text-on-surface-faint text-sm">
-                No hay datos de períodos anteriores.
-              </div>
-            )}
-          </div>
-        </div>
+        <MonthlySummary monthlyData={monthlyData} />
 
         {/* Cash Flow — 6 cols */}
         <div className="col-span-12 lg:col-span-6 bg-surface-lowest rounded-(--radius-card) p-8 shadow-card">
@@ -246,36 +211,26 @@ export default async function ReportesPage() {
               <p className="label-section mb-1">Disponibilidad en Banco</p>
               <p className="font-display text-lg font-black text-primary">{formatCurrency(margenNeto)}</p>
             </div>
-            <button type="button" aria-label="Descargar flujo de caja" className="topbar-icon-btn">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-            </button>
+            <CashflowDownloadBtn
+              year={year}
+              ingresos={ingresosTotales}
+              gastos={gastosTotales}
+              margen={margenNeto}
+              monthlyData={monthlyData}
+            />
           </div>
         </div>
       </div>
 
-      {/* Bottom Actions */}
-      <div className="flex flex-wrap gap-4 pt-4">
-        <button type="button" className="btn-secondary flex items-center gap-2 py-3">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-          </svg>
-          Descargar Dossier Completo (PDF, XLSX)
-        </button>
-        <button type="button" className="btn-secondary flex items-center gap-2 py-3">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Programar Reporte
-        </button>
-        <button type="button" className="btn-secondary flex items-center gap-2 py-3">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-          Exportar Datos
-        </button>
-      </div>
+      <ExportButtons
+        year={year}
+        monthlyData={monthlyData}
+        ingresosTotales={ingresosTotales}
+        gastosTotales={gastosTotales}
+        itbisTotales={itbisTotales}
+        margenNeto={margenNeto}
+        pendientes={pendientes}
+      />
     </div>
   );
 }

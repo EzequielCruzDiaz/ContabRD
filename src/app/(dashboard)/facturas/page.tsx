@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import type { Factura } from "@/types";
 
 type Tab = "historial" | "procesar";
+
+type AsientoLinea = { cuenta: string; debito: number | null; credito: number | null };
 
 type DatosExtraidos = {
   rnc_proveedor?: string;
@@ -15,10 +18,11 @@ type DatosExtraidos = {
   subtotal?: number;
   itbis?: number;
   total?: number;
-  asiento_contable?: string;
+  asiento_contable?: AsientoLinea[];
 };
 
 export default function FacturasPage() {
+  const router = useRouter();
   const [tab,       setTab]       = useState<Tab>("historial");
   const [facturas,  setFacturas]  = useState<Factura[]>([]);
   const [loading,   setLoading]   = useState(true);
@@ -81,7 +85,7 @@ export default function FacturasPage() {
     if (!res.ok) {
       setUploadErr(body.error ?? "Error al procesar la factura.");
     } else {
-      setDatos(body);
+      setDatos(body.datos);
       fetchFacturas();
     }
     setUploading(false);
@@ -92,6 +96,30 @@ export default function FacturasPage() {
     setDragOver(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFileChange(f);
+  }
+
+  function exportCsv() {
+    const headers = ["Fecha","NCF","RNC Emisor","Proveedor","Subtotal","ITBIS","Total","Estado"];
+    const rows = filteredFacturas.map((f) => [
+      f.fecha_factura ?? "",
+      f.ncf ?? "",
+      f.rnc_proveedor ?? "",
+      f.proveedor ?? "",
+      f.subtotal ?? 0,
+      f.itbis ?? 0,
+      f.total ?? 0,
+      f.estado,
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `facturas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const totalPeriodo = facturas.reduce((s, f) => s + (f.total ?? 0), 0);
@@ -115,7 +143,7 @@ export default function FacturasPage() {
             </p>
           </div>
           {tab === "historial" && (
-            <button type="button" className="btn-secondary flex items-center gap-2 py-2.5">
+            <button type="button" onClick={exportCsv} className="btn-secondary flex items-center gap-2 py-2.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
@@ -123,7 +151,24 @@ export default function FacturasPage() {
             </button>
           )}
           {tab === "procesar" && datos && (
-            <button type="button" className="btn-secondary flex items-center gap-2 py-2.5">
+            <button type="button" onClick={() => {
+              const rows = [
+                ["Campo","Valor"],
+                ["RNC Emisor",   datos.rnc_proveedor ?? ""],
+                ["NCF",          datos.ncf ?? ""],
+                ["Proveedor",    datos.proveedor ?? ""],
+                ["Fecha",        datos.fecha_factura ?? ""],
+                ["Subtotal",     datos.subtotal ?? 0],
+                ["ITBIS",        datos.itbis ?? 0],
+                ["Total",        datos.total ?? 0],
+              ];
+              const csv  = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+              const url  = URL.createObjectURL(blob);
+              const a    = document.createElement("a");
+              a.href = url; a.download = `factura-${datos.ncf ?? "ocr"}.csv`; a.click();
+              URL.revokeObjectURL(url);
+            }} className="btn-secondary flex items-center gap-2 py-2.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
@@ -395,7 +440,7 @@ export default function FacturasPage() {
               <div className="bg-surface-lowest rounded-(--radius-card) p-6 shadow-card">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-display font-bold text-primary">Asiento Sugerido</h3>
-                  <button type="button" className="text-xs font-semibold text-primary hover:underline underline-offset-4">
+                  <button type="button" onClick={() => router.push("/configuracion")} className="text-xs font-semibold text-primary hover:underline underline-offset-4">
                     Editar Catálogo
                   </button>
                 </div>
@@ -405,26 +450,28 @@ export default function FacturasPage() {
                     <span className="label-section text-right">Débito</span>
                     <span className="label-section text-right">Crédito</span>
                   </div>
-                  <div className="journal-row">
-                    <span className="text-on-surface">6101-01 Gastos de Honorarios</span>
-                    <span className="text-right font-mono text-on-surface">{formatCurrency(datos.subtotal ?? 0)}</span>
-                    <span className="text-right text-on-surface-faint">—</span>
-                  </div>
-                  <div className="journal-row">
-                    <span className="text-on-surface">1106-01 ITBIS Pagado</span>
-                    <span className="text-right font-mono text-on-surface">{formatCurrency(datos.itbis ?? 0)}</span>
-                    <span className="text-right text-on-surface-faint">—</span>
-                  </div>
-                  <div className="journal-row">
-                    <span className="text-on-surface">2101-01 Cuentas por Pagar</span>
-                    <span className="text-right text-on-surface-faint">—</span>
-                    <span className="text-right font-mono text-on-surface">{formatCurrency(datos.total ?? 0)}</span>
-                  </div>
-                  <div className="journal-row journal-total">
-                    <span>Total</span>
-                    <span className="text-right font-mono">{formatCurrency(datos.total ?? 0)}</span>
-                    <span className="text-right font-mono">{formatCurrency(datos.total ?? 0)}</span>
-                  </div>
+                  {datos.asiento_contable?.map((line, i) => (
+                    <div key={i} className="journal-row">
+                      <span className="text-on-surface">{line.cuenta}</span>
+                      <span className="text-right font-mono text-on-surface">
+                        {line.debito != null ? formatCurrency(line.debito) : "—"}
+                      </span>
+                      <span className="text-right font-mono text-on-surface">
+                        {line.credito != null ? formatCurrency(line.credito) : "—"}
+                      </span>
+                    </div>
+                  ))}
+                  {(() => {
+                    const totalDeb = datos.asiento_contable?.reduce((s, l) => s + (l.debito ?? 0), 0) ?? 0;
+                    const totalCre = datos.asiento_contable?.reduce((s, l) => s + (l.credito ?? 0), 0) ?? 0;
+                    return (
+                      <div className="journal-row journal-total">
+                        <span>Total</span>
+                        <span className="text-right font-mono">{formatCurrency(totalDeb)}</span>
+                        <span className="text-right font-mono">{formatCurrency(totalCre)}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}

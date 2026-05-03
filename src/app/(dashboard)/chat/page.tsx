@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import type { Message } from "@/types";
 
 const suggestions = [
@@ -35,12 +37,60 @@ const calculadoras = [
   },
 ];
 
+// ISR 2024 brackets (RD$ annual)
+const ISR_BRACKETS = [
+  { min: 0,       max: 416_220,  rate: 0,    base: 0 },
+  { min: 416_220, max: 624_329,  rate: 0.15, base: 0 },
+  { min: 624_329, max: 867_123,  rate: 0.20, base: 31_216 },
+  { min: 867_123, max: Infinity, rate: 0.25, base: 79_776 },
+];
+
+function calcISR(rentaBruta: number): { gravable: number; impuesto: number; mensual: number } {
+  const gravable = Math.max(0, rentaBruta);
+  let impuesto = 0;
+  for (const b of ISR_BRACKETS) {
+    if (gravable > b.min) {
+      impuesto = b.base + (Math.min(gravable, b.max === Infinity ? gravable : b.max) - b.min) * b.rate;
+    }
+  }
+  return { gravable, impuesto, mensual: impuesto / 12 };
+}
+
+function fmtDOP(n: number) {
+  return new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP", maximumFractionDigits: 2 }).format(n);
+}
+
 export default function ChatPage() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef    = useRef<HTMLTextAreaElement>(null);
+
+  // Calculator modals
+  const [activeCalc, setActiveCalc] = useState<"ISR" | "ITBIS" | null>(null);
+  const [isrRenta, setIsrRenta] = useState("");
+  const [itbisBase, setItbisBase] = useState("");
+  const [itbisMode, setItbisMode] = useState<"sin" | "con">("sin");
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("chat_mensajes")
+        .select("rol, contenido")
+        .eq("usuario_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(50)
+        .then(({ data }) => {
+          if (data?.length) {
+            setMessages(data.map((m) => ({ role: m.rol as "user" | "assistant", content: m.contenido })));
+          }
+        });
+    });
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,7 +109,7 @@ export default function ChatPage() {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: updated }),
+      body: JSON.stringify({ message: trimmed, history: messages }),
     });
     const data = await res.json();
     setMessages([...updated, { role: "assistant", content: data.reply ?? "" }]);
@@ -188,7 +238,12 @@ export default function ChatPage() {
           <p className="label-section mb-3">Calculadoras</p>
           <div className="space-y-2">
             {calculadoras.map((c) => (
-              <button key={c.label} type="button" className="chat-calc-card w-full text-left">
+              <button
+                key={c.label}
+                type="button"
+                onClick={() => setActiveCalc(c.label === "ISR Personas" ? "ISR" : "ITBIS")}
+                className="chat-calc-card w-full text-left"
+              >
                 <div className="w-9 h-9 rounded-lg bg-surface-low flex items-center justify-center shrink-0">
                   {c.icon}
                 </div>
@@ -208,12 +263,140 @@ export default function ChatPage() {
             <p className="text-xs text-white/60 mb-4 leading-relaxed">
               Revisa la estructura contable de tu empresa.
             </p>
-            <button type="button" className="w-full py-2.5 rounded-lg text-sm font-bold text-primary bg-success-light hover:bg-success hover:text-white transition-colors">
+            <button
+              type="button"
+              onClick={() => router.push("/configuracion")}
+              className="w-full py-2.5 rounded-lg text-sm font-bold text-primary bg-success-light hover:bg-success hover:text-white transition-colors"
+            >
               VER ESTRUCTURA →
             </button>
           </div>
         </div>
       </aside>
+
+      {/* ── ISR Calculator Modal ── */}
+      {activeCalc === "ISR" && (() => {
+        const renta = parseFloat(isrRenta.replace(/,/g, "")) || 0;
+        const { gravable, impuesto, mensual } = calcISR(renta);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setActiveCalc(null)}>
+            <div className="bg-surface-lowest rounded-(--radius-card) p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-display text-xl font-bold text-primary">ISR Personas Físicas 2024</h3>
+                <button type="button" onClick={() => setActiveCalc(null)} className="topbar-icon-btn" aria-label="Cerrar">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="isr-renta" className="label-section mb-1 block">Renta Bruta Anual (DOP)</label>
+                  <input
+                    id="isr-renta"
+                    type="number"
+                    value={isrRenta}
+                    onChange={(e) => setIsrRenta(e.target.value)}
+                    placeholder="Ej: 800000"
+                    className="input-field w-full"
+                  />
+                </div>
+                {renta > 0 && (
+                  <div className="bg-surface-low rounded-xl p-5 space-y-3 mt-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-on-surface-muted">Renta gravable</span>
+                      <span className="font-bold text-primary">{fmtDOP(gravable)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-on-surface-muted">ISR anual</span>
+                      <span className="font-bold text-danger">{fmtDOP(impuesto)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm sidebar-divider pt-3">
+                      <span className="font-semibold text-primary">Retención mensual</span>
+                      <span className="font-black text-primary text-base">{fmtDOP(mensual)}</span>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-on-surface-faint">
+                  Escala según Norma 08-2015. Exento hasta RD$416,220 anuales.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── ITBIS Calculator Modal ── */}
+      {activeCalc === "ITBIS" && (() => {
+        const base = parseFloat(itbisBase.replace(/,/g, "")) || 0;
+        const RATE = 0.18;
+        let sinItbis = 0, itbis = 0, conItbis = 0;
+        if (itbisMode === "sin") {
+          sinItbis = base; itbis = base * RATE; conItbis = base + itbis;
+        } else {
+          conItbis = base; sinItbis = base / (1 + RATE); itbis = base - sinItbis;
+        }
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setActiveCalc(null)}>
+            <div className="bg-surface-lowest rounded-(--radius-card) p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-display text-xl font-bold text-primary">Calculadora ITBIS (18%)</h3>
+                <button type="button" onClick={() => setActiveCalc(null)} className="topbar-icon-btn" aria-label="Cerrar">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="flex gap-2 p-1 bg-surface-low rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setItbisMode("sin")}
+                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${itbisMode === "sin" ? "bg-primary text-white" : "text-on-surface-muted"}`}
+                  >
+                    Monto sin ITBIS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setItbisMode("con")}
+                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${itbisMode === "con" ? "bg-primary text-white" : "text-on-surface-muted"}`}
+                  >
+                    Monto con ITBIS
+                  </button>
+                </div>
+                <div>
+                  <label htmlFor="itbis-base" className="label-section mb-1 block">
+                    {itbisMode === "sin" ? "Subtotal (sin ITBIS)" : "Total (con ITBIS"} (DOP)
+                  </label>
+                  <input
+                    id="itbis-base"
+                    type="number"
+                    value={itbisBase}
+                    onChange={(e) => setItbisBase(e.target.value)}
+                    placeholder="Ej: 5000"
+                    className="input-field w-full"
+                  />
+                </div>
+                {base > 0 && (
+                  <div className="bg-surface-low rounded-xl p-5 space-y-3 mt-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-on-surface-muted">Subtotal (sin ITBIS)</span>
+                      <span className="font-bold text-primary">{fmtDOP(sinItbis)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-on-surface-muted">ITBIS (18%)</span>
+                      <span className="font-bold text-warning">{fmtDOP(itbis)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm sidebar-divider pt-3">
+                      <span className="font-semibold text-primary">Total con ITBIS</span>
+                      <span className="font-black text-primary text-base">{fmtDOP(conItbis)}</span>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-on-surface-faint">
+                  Tasa general ITBIS: 18%. Algunos bienes exentos o tasa reducida (8%).
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

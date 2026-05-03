@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RolUsuario } from "@/types";
 
@@ -15,6 +15,7 @@ interface EmpresaData {
   id: string;
   nombre: string;
   rnc: string | null;
+  direccion: string | null;
 }
 
 function getInitials(name: string) {
@@ -34,14 +35,30 @@ function RoleBadge({ rol }: { rol: RolUsuario }) {
 }
 
 export default function EmpresaPage() {
-  const [empresa,  setEmpresa]  = useState<EmpresaData | null>(null);
-  const [rnc,      setRnc]      = useState("");
-  const [nombre,   setNombre]   = useState("");
-  const [direccion, setDireccion] = useState("");
-  const [team,     setTeam]     = useState<TeamMember[]>([]);
-  const [saving,   setSaving]   = useState(false);
-  const [saved,    setSaved]    = useState(false);
-  const [inviting, setInviting] = useState(false);
+  const [empresa,    setEmpresa]    = useState<EmpresaData | null>(null);
+  const [rnc,        setRnc]        = useState("");
+  const [nombre,     setNombre]     = useState("");
+  const [direccion,  setDireccion]  = useState("");
+  const [team,       setTeam]       = useState<TeamMember[]>([]);
+  const [saving,     setSaving]     = useState(false);
+  const [saved,      setSaved]      = useState(false);
+  const [inviting,   setInviting]   = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMsg,  setInviteMsg]  = useState<{ ok: boolean; text: string } | null>(null);
+  const [openMenu,   setOpenMenu]   = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const empresaId = empresa?.id ?? "";
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -60,7 +77,7 @@ export default function EmpresaPage() {
       const [{ data: emp }, { data: members }] = await Promise.all([
         supabase
           .from("empresas")
-          .select("id, nombre, rnc")
+          .select("id, nombre, rnc, direccion")
           .eq("id", profile.empresa_id)
           .single(),
         supabase
@@ -73,6 +90,7 @@ export default function EmpresaPage() {
         setEmpresa(emp);
         setRnc(emp.rnc ?? "");
         setNombre(emp.nombre ?? "");
+        setDireccion(emp.direccion ?? "");
       }
 
       if (members) {
@@ -96,11 +114,53 @@ export default function EmpresaPage() {
     const supabase = createClient();
     await supabase
       .from("empresas")
-      .update({ nombre, rnc: rnc || null })
+      .update({ nombre, rnc: rnc || null, direccion: direccion || null })
       .eq("id", empresa.id);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  }
+
+  async function handleInvite() {
+    if (!inviteEmail.trim() || !empresaId) return;
+    setInviteSending(true);
+    setInviteMsg(null);
+    const res = await fetch("/api/empresa/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: inviteEmail.trim(), empresaId }),
+    });
+    const data = await res.json();
+    setInviteSending(false);
+    if (data.ok) {
+      setInviteMsg({ ok: true, text: `Invitación enviada a ${inviteEmail.trim()}` });
+      setInviteEmail("");
+      setTimeout(() => { setInviting(false); setInviteMsg(null); }, 3000);
+    } else {
+      setInviteMsg({ ok: false, text: data.error ?? "Error al enviar invitación" });
+    }
+  }
+
+  async function handleChangeRol(memberId: string, rol: RolUsuario) {
+    setOpenMenu(null);
+    await fetch("/api/empresa/member", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId, rol }),
+    });
+    setTeam((prev) => prev.map((m) => m.id === memberId ? { ...m, rol } : m));
+  }
+
+  async function handleRemove(memberId: string) {
+    setOpenMenu(null);
+    const res = await fetch("/api/empresa/member", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId }),
+    });
+    if (res.ok) {
+      setTeam((prev) => prev.filter((m) => m.id !== memberId));
+    }
   }
 
   return (
@@ -220,28 +280,39 @@ export default function EmpresaPage() {
 
             {/* Invite banner */}
             {inviting && (
-              <div className="px-8 py-4 bg-surface-low flex items-center gap-4 sidebar-divider">
-                <input
-                  type="email"
-                  placeholder="correo@empresa.do"
-                  className="empresa-input flex-1 text-sm"
-                  aria-label="Correo electrónico para invitar"
-                />
-                <button
-                  type="button"
-                  className="btn-primary py-2.5 px-4 text-sm shrink-0"
-                  onClick={() => setInviting(false)}
-                >
-                  Enviar Invitación
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary py-2.5 px-4 text-sm shrink-0"
-                  onClick={() => setInviting(false)}
-                  aria-label="Cancelar invitación"
-                >
-                  Cancelar
-                </button>
+              <div className="px-8 py-4 bg-surface-low space-y-2 sidebar-divider">
+                <div className="flex items-center gap-4">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="correo@empresa.do"
+                    className="empresa-input flex-1 text-sm"
+                    aria-label="Correo electrónico para invitar"
+                    onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                  />
+                  <button
+                    type="button"
+                    disabled={inviteSending || !inviteEmail.trim()}
+                    className="btn-primary py-2.5 px-4 text-sm shrink-0"
+                    onClick={handleInvite}
+                  >
+                    {inviteSending ? "Enviando…" : "Enviar Invitación"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary py-2.5 px-4 text-sm shrink-0"
+                    onClick={() => { setInviting(false); setInviteMsg(null); setInviteEmail(""); }}
+                    aria-label="Cancelar invitación"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                {inviteMsg && (
+                  <p className={`text-xs font-semibold ${inviteMsg.ok ? "text-success" : "text-danger"}`}>
+                    {inviteMsg.text}
+                  </p>
+                )}
               </div>
             )}
 
@@ -287,15 +358,42 @@ export default function EmpresaPage() {
                           )}
                         </td>
                         <td className="text-right">
-                          <button
-                            type="button"
-                            aria-label="Más opciones"
-                            className="topbar-icon-btn"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-                            </svg>
-                          </button>
+                          <div className="relative inline-block" ref={openMenu === member.id ? menuRef : null}>
+                            <button
+                              type="button"
+                              aria-label="Más opciones"
+                              className="topbar-icon-btn"
+                              onClick={() => setOpenMenu(openMenu === member.id ? null : member.id)}
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                              </svg>
+                            </button>
+                            {openMenu === member.id && (
+                              <div className="absolute right-0 mt-1 w-48 bg-surface-lowest rounded-xl shadow-2xl border border-surface-high z-50 py-1 text-sm">
+                                <p className="px-3 py-2 text-xs font-bold text-on-surface-faint uppercase tracking-wider">Cambiar rol</p>
+                                {(["admin", "contador", "usuario"] as RolUsuario[]).map((r) => (
+                                  <button
+                                    key={r}
+                                    type="button"
+                                    onClick={() => handleChangeRol(member.id, r)}
+                                    className={`w-full text-left px-4 py-2 hover:bg-surface-low transition-colors capitalize ${member.rol === r ? "font-bold text-primary" : "text-on-surface"}`}
+                                  >
+                                    {r === "admin" ? "Administrador" : r === "contador" ? "Contador" : "Solo Lectura"}
+                                    {member.rol === r && " ✓"}
+                                  </button>
+                                ))}
+                                <div className="my-1 border-t border-surface-high" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemove(member.id)}
+                                  className="w-full text-left px-4 py-2 text-danger hover:bg-danger-light transition-colors"
+                                >
+                                  Remover acceso
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))

@@ -31,55 +31,125 @@ const STEP_LABELS: Record<Step, string> = {
   3: "Configuración de Período",
 };
 
+function passwordScore(p: string): { bars: number; label: string; color: string } {
+  if (!p) return { bars: 0, label: "", color: "" };
+  let score = 0;
+  if (p.length >= 8)  score++;
+  if (p.length >= 12) score++;
+  if (/[A-Z]/.test(p) && /[a-z]/.test(p)) score++;
+  if (/[0-9]/.test(p)) score++;
+  if (/[^A-Za-z0-9]/.test(p)) score++;
+
+  if (score <= 2) return { bars: 1, label: "Débil",  color: "bg-danger" };
+  if (score <= 3) return { bars: 2, label: "Media",  color: "bg-warning" };
+  return             { bars: 3, label: "Fuerte", color: "bg-success" };
+}
+
+function readDraft() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 export default function RegisterPage() {
   const router   = useRouter();
   const supabase = createClient();
 
-  function readDraft() {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  }
-
-  const [step, setStep]             = useState<Step>(() => readDraft()?.step ?? 1);
-  const [nombre,    setNombre]       = useState<string>(() => readDraft()?.nombre ?? "");
-  const [email,     setEmail]        = useState<string>(() => readDraft()?.email ?? "");
-  const [password,  setPassword]     = useState<string>(() => readDraft()?.password ?? "");
-  const [tipo,      setTipo]         = useState<TipoContrib>(() => readDraft()?.tipo ?? "juridica");
-  const [rnc,       setRnc]          = useState<string>(() => readDraft()?.rnc ?? "");
-  const [razonSocial, setRazonSocial]= useState<string>(() => readDraft()?.razonSocial ?? "");
-  const [direccion, setDireccion]    = useState<string>(() => readDraft()?.direccion ?? "");
-  const [mesInicio, setMesInicio]    = useState<string>(() => readDraft()?.mesInicio ?? "1");
-  const [moneda,    setMoneda]       = useState<string>(() => readDraft()?.moneda ?? "DOP");
+  const [confirmacionPendiente, setConfirmacionPendiente] = useState(false);
+  const [step,        setStep]        = useState<Step>(() => readDraft()?.step ?? 1);
+  const [nombre,      setNombre]      = useState<string>(() => readDraft()?.nombre ?? "");
+  const [email,       setEmail]       = useState<string>(() => readDraft()?.email ?? "");
+  const [password,    setPassword]    = useState<string>("");
+  const [tipo,        setTipo]        = useState<TipoContrib>(() => readDraft()?.tipo ?? "juridica");
+  const [rnc,         setRnc]         = useState<string>(() => readDraft()?.rnc ?? "");
+  const [razonSocial, setRazonSocial] = useState<string>(() => readDraft()?.razonSocial ?? "");
+  const [direccion,   setDireccion]   = useState<string>(() => readDraft()?.direccion ?? "");
+  const [mesInicio,   setMesInicio]   = useState<string>(() => readDraft()?.mesInicio ?? "1");
+  const [moneda,      setMoneda]      = useState<string>(() => readDraft()?.moneda ?? "DOP");
 
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
-  // Persist draft on every change
+  const pwStrength = passwordScore(password);
+
+  // Persist draft — password intentionally excluded for security
   useEffect(() => {
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-        step, nombre, email, password, tipo, rnc, razonSocial, direccion, mesInicio, moneda,
+        step, nombre, email, tipo, rnc, razonSocial, direccion, mesInicio, moneda,
       }));
-    } catch {
-      // ignore quota errors
-    }
-  }, [step, nombre, email, password, tipo, rnc, razonSocial, direccion, mesInicio, moneda]);
+    } catch { /* ignore quota errors */ }
+  }, [step, nombre, email, tipo, rnc, razonSocial, direccion, mesInicio, moneda]);
 
-  function advance() {
+  async function checkAvailability(field: "email" | "rnc" | "razonSocial", value: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await fetch("/api/auth/check-availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field, value }),
+      });
+      const body = await res.json();
+      if (!res.ok) return { ok: false, error: body.error ?? "No se pudo validar." };
+      return { ok: body.available };
+    } catch {
+      return { ok: false, error: "Error de red al validar." };
+    }
+  }
+
+  async function advance() {
     setError(null);
+
     if (step === 1) {
-      if (!nombre.trim() || !email.trim() || password.length < 6) {
-        setError("Complete todos los campos. La contraseña debe tener al menos 6 caracteres.");
+      if (!nombre.trim() || !email.trim()) {
+        setError("Complete nombre y correo electrónico.");
+        return;
+      }
+      if (password.length < 6) {
+        setError("La contraseña debe tener al menos 6 caracteres.");
+        return;
+      }
+
+      setLoading(true);
+      const result = await checkAvailability("email", email.trim());
+      setLoading(false);
+
+      if (result.error) { setError(result.error); return; }
+      if (!result.ok) {
+        setError("Ya existe una cuenta con ese correo electrónico.");
         return;
       }
     }
-    if (step === 2 && !razonSocial.trim()) {
-      setError("La razón social es obligatoria.");
-      return;
+
+    if (step === 2) {
+      if (!razonSocial.trim()) {
+        setError("La razón social es obligatoria.");
+        return;
+      }
+
+      setLoading(true);
+
+      if (rnc.trim()) {
+        const rncResult = await checkAvailability("rnc", rnc.trim());
+        if (rncResult.error) { setLoading(false); setError(rncResult.error); return; }
+        if (!rncResult.ok) {
+          setLoading(false);
+          setError("Ya existe una empresa registrada con ese RNC.");
+          return;
+        }
+      }
+
+      const nombreResult = await checkAvailability("razonSocial", razonSocial.trim());
+      setLoading(false);
+
+      if (nombreResult.error) { setError(nombreResult.error); return; }
+      if (!nombreResult.ok) {
+        setError("Ya existe una empresa registrada con esa razón social.");
+        return;
+      }
     }
+
     setStep((s) => (s + 1) as Step);
   }
 
@@ -88,8 +158,7 @@ export default function RegisterPage() {
     setStep((s) => (s - 1) as Step);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setLoading(true);
     setError(null);
 
@@ -100,7 +169,12 @@ export default function RegisterPage() {
     });
 
     if (signUpError || !data.user) {
-      setError(signUpError?.message ?? "Error al crear la cuenta.");
+      const msg = signUpError?.message ?? "";
+      if (msg.toLowerCase().includes("already registered")) {
+        setError("Ya existe una cuenta con ese correo electrónico.");
+      } else {
+        setError(msg || "Error al crear la cuenta.");
+      }
       setLoading(false);
       return;
     }
@@ -127,8 +201,41 @@ export default function RegisterPage() {
     }
 
     sessionStorage.removeItem(STORAGE_KEY);
+
+    if (!data.session) {
+      // Supabase email confirmation is enabled — user must verify before logging in
+      setLoading(false);
+      setConfirmacionPendiente(true);
+      return;
+    }
+
     router.push("/dashboard");
     router.refresh();
+  }
+
+  if (confirmacionPendiente) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface p-6">
+        <div className="auth-card w-full max-w-md p-10 text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-success-light flex items-center justify-center mx-auto">
+            <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          </div>
+          <h2 className="font-display text-2xl font-bold text-primary">Revisa tu correo</h2>
+          <p className="text-on-surface-muted text-sm leading-relaxed">
+            Te enviamos un enlace de confirmación a <strong className="text-primary">{email}</strong>.
+            Confirma tu cuenta para poder iniciar sesión.
+          </p>
+          <p className="text-xs text-on-surface-faint">
+            Si no ves el correo, revisa la carpeta de spam.
+          </p>
+          <Link href="/login" className="btn-primary block w-full py-3 text-sm mt-2">
+            Ir al inicio de sesión
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -206,7 +313,8 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Step content — no <form> wrapper to prevent any accidental submission */}
+            <div className="space-y-8">
 
               {/* ── Step 1: Datos de Administrador ── */}
               {step === 1 && (
@@ -240,6 +348,30 @@ export default function RegisterPage() {
                       placeholder="Mínimo 6 caracteres"
                       className="input-field"
                     />
+                    {/* Password strength meter */}
+                    {password && (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex gap-1">
+                          {[1, 2, 3].map((bar) => (
+                            <div
+                              key={bar}
+                              className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                                bar <= pwStrength.bars ? pwStrength.color : "bg-surface-high"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <p className={`text-xs font-medium ${
+                          pwStrength.bars === 1 ? "text-danger"
+                          : pwStrength.bars === 2 ? "text-warning"
+                          : "text-success"
+                        }`}>
+                          {pwStrength.label}
+                          {pwStrength.bars === 1 && " — use mayúsculas, números y símbolos"}
+                          {pwStrength.bars === 2 && " — añada símbolos o aumente la longitud"}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -301,7 +433,7 @@ export default function RegisterPage() {
                         placeholder="Av. Winston Churchill #123, Santo Domingo"
                         className="input-field input-field-icon"
                       />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-faint">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-faint">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
@@ -363,16 +495,26 @@ export default function RegisterPage() {
                 )}
 
                 {step < 3 ? (
-                  <button type="button" onClick={advance} className="btn-primary px-10 py-4 text-base">
-                    Continuar →
+                  <button
+                    type="button"
+                    onClick={advance}
+                    disabled={loading}
+                    className="btn-primary px-10 py-4 text-base"
+                  >
+                    {loading ? "Verificando..." : "Continuar →"}
                   </button>
                 ) : (
-                  <button type="submit" disabled={loading} className="btn-primary px-10 py-4 text-base">
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="btn-primary px-10 py-4 text-base"
+                  >
                     {loading ? "Creando cuenta..." : "Crear Cuenta"}
                   </button>
                 )}
               </div>
-            </form>
+            </div>
 
             <div className="auth-divider mt-6 pt-6 text-center">
               <p className="text-sm text-on-surface-muted">
@@ -392,9 +534,18 @@ export default function RegisterPage() {
             © 2025 QFiscal. República Dominicana. Todos los derechos reservados.
           </p>
           <nav className="flex gap-6">
-            {["Privacidad", "Términos de Servicio", "Ayuda Fiscal"].map((link) => (
-              <Link key={link} href="#" className="text-sm text-on-surface-faint hover:underline underline-offset-4">
-                {link}
+            {[
+              { label: "Privacidad", href: "/privacidad" },
+              { label: "Términos de Servicio", href: "/terminos" },
+              { label: "Ayuda Fiscal", href: "https://dgii.gov.do", external: true },
+            ].map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="text-sm text-on-surface-faint hover:underline underline-offset-4"
+              >
+                {link.label}
               </Link>
             ))}
           </nav>

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+
+const LOGIN_EMAIL_KEY = "contabrd_login_email";
 
 export default function LoginPage() {
   const router   = useRouter();
@@ -14,6 +16,22 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
+
+  // Restore saved email on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(LOGIN_EMAIL_KEY);
+      if (saved) setEmail(saved);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Persist email while typing (not password — security)
+  useEffect(() => {
+    try {
+      if (email) sessionStorage.setItem(LOGIN_EMAIL_KEY, email);
+      else sessionStorage.removeItem(LOGIN_EMAIL_KEY);
+    } catch { /* ignore */ }
+  }, [email]);
 
   async function handleSubmit() {
     setLoading(true);
@@ -30,6 +48,7 @@ export default function LoginPage() {
     // Persist the "remember me" preference so SessionGuard can enforce it
     localStorage.setItem("remember-me", remember ? "true" : "false");
     sessionStorage.setItem("session-started", "1");
+    sessionStorage.removeItem(LOGIN_EMAIL_KEY);
 
     router.push("/dashboard");
     router.refresh();
@@ -196,9 +215,18 @@ export default function LoginPage() {
             © 2025 QFiscal. República Dominicana. Todos los derechos reservados.
           </p>
           <nav className="flex gap-6">
-            {["Privacidad", "Términos de Servicio", "Ayuda Fiscal"].map((link) => (
-              <Link key={link} href="#" className="text-sm text-on-surface-faint hover:underline underline-offset-4">
-                {link}
+            {[
+              { label: "Privacidad", href: "/privacidad" },
+              { label: "Términos de Servicio", href: "/terminos" },
+              { label: "Ayuda Fiscal", href: "https://dgii.gov.do", external: true },
+            ].map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="text-sm text-on-surface-faint hover:underline underline-offset-4"
+              >
+                {link.label}
               </Link>
             ))}
           </nav>

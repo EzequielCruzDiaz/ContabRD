@@ -93,9 +93,9 @@ export default function Sidebar() {
 
       {/* Submit Tax Return */}
       <div className="mt-8">
-        <button type="button" className="btn-primary w-full py-3.5 text-sm">
+        <Link href="/consultas-dgii" className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2">
           Enviar Declaración
-        </button>
+        </Link>
       </div>
 
       {/* Secondary nav */}

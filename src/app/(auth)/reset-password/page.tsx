@@ -223,9 +223,18 @@ export default function ResetPasswordPage() {
             © 2025 QFiscal. República Dominicana. Todos los derechos reservados.
           </p>
           <nav className="flex gap-6">
-            {["Privacidad", "Términos de Servicio", "Ayuda Fiscal"].map((link) => (
-              <Link key={link} href="#" className="text-sm text-on-surface-faint hover:underline underline-offset-4">
-                {link}
+            {[
+              { label: "Privacidad", href: "/privacidad" },
+              { label: "Términos de Servicio", href: "/terminos" },
+              { label: "Ayuda Fiscal", href: "https://dgii.gov.do", external: true },
+            ].map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                className="text-sm text-on-surface-faint hover:underline underline-offset-4"
+              >
+                {link.label}
               </Link>
             ))}
           </nav>
