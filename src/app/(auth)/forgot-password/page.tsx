@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError(null);
 
-    const redirectTo = `${window.location.origin}/auth/recovery`;
+    const redirectTo = `${window.location.origin}/api/auth/callback?next=/reset-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 
     setLoading(false);
@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
             <div className="relative z-10">
               <blockquote className="mb-8">
                 <p className="font-display text-2xl font-semibold leading-snug opacity-90">
-                  "Recupere el acceso a su plataforma fiscal de manera segura."
+                  &ldquo;Recupere el acceso a su plataforma fiscal de manera segura.&rdquo;
                 </p>
               </blockquote>
               <div className="flex items-center gap-4">

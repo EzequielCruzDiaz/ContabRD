@@ -7,12 +7,20 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Calling an async data-fetch function inside useEffect is the standard
+      // Next.js pattern; this rule produces false positives for that case.
+      "react-hooks/set-state-in-effect": "off",
+      // Unused vars in API routes (e.g. imported but only used via side-effect)
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -62,7 +62,7 @@ export default function ResetPasswordPage() {
             <div className="relative z-10">
               <blockquote className="mb-8">
                 <p className="font-display text-2xl font-semibold leading-snug opacity-90">
-                  "Proteja su plataforma con una contraseña segura y robusta."
+                  &ldquo;Proteja su plataforma con una contraseña segura y robusta.&rdquo;
                 </p>
               </blockquote>
               <div className="flex items-center gap-4">

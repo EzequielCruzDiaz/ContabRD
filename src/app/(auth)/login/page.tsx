@@ -75,7 +75,7 @@ export default function LoginPage() {
             <div className="relative z-10">
               <blockquote className="mb-8">
                 <p className="font-display text-2xl font-semibold leading-snug opacity-90">
-                  "La arquitectura de su éxito financiero, construida sobre la base de la precisión fiscal."
+                  &ldquo;La arquitectura de su éxito financiero, construida sobre la base de la precisión fiscal.&rdquo;
                 </p>
               </blockquote>
               <div className="flex items-center gap-4">

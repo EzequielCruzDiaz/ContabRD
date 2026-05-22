@@ -297,7 +297,7 @@ export default function RegisterPage() {
 
             <div className="relative z-10 mt-10">
               <div className="p-4 rounded-xl bg-white/5">
-                <p className="text-xs italic opacity-70">"La precisión es la base de la confianza financiera."</p>
+                <p className="text-xs italic opacity-70">&ldquo;La precisión es la base de la confianza financiera.&rdquo;</p>
               </div>
             </div>
           </div>

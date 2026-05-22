@@ -106,14 +106,26 @@ export default function ChatPage() {
     setInput("");
     setLoading(true);
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: trimmed, history: messages }),
-    });
-    const data = await res.json();
-    setMessages([...updated, { role: "assistant", content: data.reply ?? "" }]);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, history: messages }),
+      });
+      const data = await res.json();
+
+      const reply = data.reply
+        || (data.error ? `⚠️ ${data.error}` : "⚠️ No se recibió respuesta del asistente.");
+
+      setMessages([...updated, { role: "assistant", content: reply }]);
+    } catch {
+      setMessages([...updated, {
+        role: "assistant",
+        content: "⚠️ Error de conexión. Verifica tu internet e intenta de nuevo.",
+      }]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -265,7 +277,7 @@ export default function ChatPage() {
             </p>
             <button
               type="button"
-              onClick={() => router.push("/configuracion")}
+              onClick={() => router.push("/empresa")}
               className="w-full py-2.5 rounded-lg text-sm font-bold text-primary bg-success-light hover:bg-success hover:text-white transition-colors"
             >
               VER ESTRUCTURA →

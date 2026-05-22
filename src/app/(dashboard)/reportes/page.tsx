@@ -168,7 +168,7 @@ export default async function ReportesPage() {
           </div>
           <div className="mt-8 pt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
             <p className="text-sm italic opacity-60">
-              "Mantén un ratio de solvencia positivo para una salud financiera óptima."
+              &ldquo;Mantén un ratio de solvencia positivo para una salud financiera óptima.&rdquo;
             </p>
           </div>
         </div>

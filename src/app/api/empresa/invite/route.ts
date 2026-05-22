@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.empresa_id !== empresaId || profile.rol !== "admin") {
+  if (!profile || profile.empresa_id !== empresaId || profile.rol !== "admin") {
     return NextResponse.json({ error: "Solo administradores pueden invitar usuarios" }, { status: 403 });
   }
 
