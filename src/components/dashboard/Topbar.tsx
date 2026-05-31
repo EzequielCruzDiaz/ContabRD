@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSidebar } from "./DashboardShell";
 
 const pageTitles: Record<string, string> = {
   "/dashboard":      "Panel de Control Fiscal",
@@ -14,12 +15,23 @@ const pageTitles: Record<string, string> = {
 
 export default function Topbar() {
   const pathname = usePathname();
-  const title = pageTitles[pathname] ?? "QFiscal";
+  const title    = pageTitles[pathname] ?? "QFiscal";
+  const { toggle } = useSidebar();
 
   return (
     <header className="topbar">
-      {/* Left: brand + search */}
-      <div className="flex items-center gap-6 flex-1">
+      {/* Left: hamburger (mobile) + title + search */}
+      <div className="flex items-center gap-4 flex-1">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label="Abrir menú"
+          className="topbar-icon-btn lg:hidden shrink-0"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </button>
         <span className="font-display font-extrabold text-base tracking-tight text-primary shrink-0">
           {title}
         </span>

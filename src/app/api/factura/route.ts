@@ -65,3 +65,30 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ factura, datos });
 }
+
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const { id, ...campos } = await req.json() as { id: string; [k: string]: unknown };
+  if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
+
+  const allowed = ["rnc_proveedor","ncf","proveedor","fecha_factura","subtotal","itbis","total"];
+  const update: Record<string, unknown> = {};
+  for (const k of allowed) {
+    if (k in campos) update[k] = campos[k];
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles").select("empresa_id").eq("id", user.id).single();
+
+  const { error } = await supabase
+    .from("facturas")
+    .update(update)
+    .eq("id", id)
+    .eq("empresa_id", profile?.empresa_id ?? "");
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

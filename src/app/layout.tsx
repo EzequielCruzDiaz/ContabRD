@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
+import OfflineBanner from "@/components/OfflineBanner";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -31,7 +32,10 @@ export default function RootLayout({
       lang="es"
       className={`${manrope.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <OfflineBanner />
+        {children}
+      </body>
     </html>
   );
 }

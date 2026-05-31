@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/utils";
 import { getUpcomingDgiiEvents } from "@/lib/dgii-calendar";
 import AgendarCitaCard from "@/components/dashboard/AgendarCitaCard";
+import WelcomeBanner from "@/components/dashboard/WelcomeBanner";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -48,6 +49,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-10">
+      {/* Welcome banner — only for new users with no data */}
+      {(!recientes || recientes.length === 0) && (
+        <WelcomeBanner nombre={profile?.nombre} />
+      )}
+
       {/* Page Header */}
       <div>
         <h2 className="font-display text-3xl font-extrabold text-primary tracking-tight">

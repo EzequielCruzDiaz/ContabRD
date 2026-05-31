@@ -4,22 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils";
-import type { Factura } from "@/types";
+import type { Factura, DatosFacturaExtraidos } from "@/types";
 
 type Tab = "historial" | "procesar";
-
-type AsientoLinea = { cuenta: string; debito: number | null; credito: number | null };
-
-type DatosExtraidos = {
-  rnc_proveedor?: string;
-  ncf?: string;
-  proveedor?: string;
-  fecha_factura?: string;
-  subtotal?: number;
-  itbis?: number;
-  total?: number;
-  asiento_contable?: AsientoLinea[];
-};
 
 export default function FacturasPage() {
   const router = useRouter();
@@ -31,9 +18,12 @@ export default function FacturasPage() {
   const [file,       setFile]       = useState<File | null>(null);
   const [preview,    setPreview]    = useState<string | null>(null);
   const [uploading,  setUploading]  = useState(false);
-  const [datos,      setDatos]      = useState<DatosExtraidos | null>(null);
+  const [datos,      setDatos]      = useState<DatosFacturaExtraidos | null>(null);
+  const [facturaId,  setFacturaId]  = useState<string | null>(null);
   const [uploadErr,  setUploadErr]  = useState<string | null>(null);
   const [dragOver,   setDragOver]   = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [savedOk,    setSavedOk]    = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filters
@@ -86,6 +76,8 @@ export default function FacturasPage() {
       setUploadErr(body.error ?? "Error al procesar la factura.");
     } else {
       setDatos(body.datos);
+      setFacturaId(body.factura?.id ?? null);
+      setSavedOk(false);
       fetchFacturas();
     }
     setUploading(false);
@@ -96,6 +88,21 @@ export default function FacturasPage() {
     setDragOver(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFileChange(f);
+  }
+
+  async function handleSaveCorrections() {
+    if (!facturaId || !datos) return;
+    setSaving(true);
+    const res = await fetch("/api/factura", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: facturaId, ...datos }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setSavedOk(true);
+      fetchFacturas();
+    }
   }
 
   function exportCsv() {
@@ -390,40 +397,101 @@ export default function FacturasPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="label-section mb-1.5">RNC Emisor</p>
-                      <div className="extracted-field font-mono">{datos.rnc_proveedor ?? "—"}</div>
+                      <label htmlFor="ed-rnc" className="label-section block mb-1.5">RNC Emisor</label>
+                      <input
+                        id="ed-rnc"
+                        className="input-field font-mono text-sm"
+                        value={datos.rnc_proveedor ?? ""}
+                        onChange={(e) => setDatos({ ...datos, rnc_proveedor: e.target.value })}
+                      />
                     </div>
                     <div>
-                      <p className="label-section mb-1.5">NCF</p>
-                      <div className="extracted-field font-mono">{datos.ncf ?? "—"}</div>
+                      <label htmlFor="ed-ncf" className="label-section block mb-1.5">NCF</label>
+                      <input
+                        id="ed-ncf"
+                        className="input-field font-mono text-sm"
+                        value={datos.ncf ?? ""}
+                        onChange={(e) => setDatos({ ...datos, ncf: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div>
-                    <p className="label-section mb-1.5">Nombre del Proveedor</p>
-                    <div className="extracted-field">{datos.proveedor ?? "—"}</div>
+                    <label htmlFor="ed-proveedor" className="label-section block mb-1.5">Nombre del Proveedor</label>
+                    <input
+                      id="ed-proveedor"
+                      className="input-field text-sm"
+                      value={datos.proveedor ?? ""}
+                      onChange={(e) => setDatos({ ...datos, proveedor: e.target.value })}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="label-section mb-1.5">Fecha</p>
-                      <div className="extracted-field">{datos.fecha_factura ?? "—"}</div>
+                      <label htmlFor="ed-fecha" className="label-section block mb-1.5">Fecha</label>
+                      <input
+                        id="ed-fecha"
+                        type="date"
+                        className="input-field text-sm"
+                        value={datos.fecha_factura ?? ""}
+                        onChange={(e) => setDatos({ ...datos, fecha_factura: e.target.value })}
+                      />
                     </div>
                     <div>
-                      <p className="label-section mb-1.5">Subtotal (DOP$)</p>
-                      <div className="extracted-field">{formatCurrency(datos.subtotal ?? 0)}</div>
+                      <label htmlFor="ed-subtotal" className="label-section block mb-1.5">Subtotal (DOP$)</label>
+                      <input
+                        id="ed-subtotal"
+                        type="number"
+                        className="input-field text-sm"
+                        value={datos.subtotal ?? ""}
+                        onChange={(e) => setDatos({ ...datos, subtotal: parseFloat(e.target.value) || 0 })}
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="label-section mb-1.5">ITBIS (18%)</p>
-                      <div className="extracted-field">{formatCurrency(datos.itbis ?? 0)}</div>
+                      <label htmlFor="ed-itbis" className="label-section block mb-1.5">ITBIS (18%)</label>
+                      <input
+                        id="ed-itbis"
+                        type="number"
+                        className="input-field text-sm"
+                        value={datos.itbis ?? ""}
+                        onChange={(e) => setDatos({ ...datos, itbis: parseFloat(e.target.value) || 0 })}
+                      />
                     </div>
                     <div>
-                      <p className="label-section mb-1.5">Total Factura (DOP$)</p>
-                      <div className="extracted-field font-display font-bold text-primary">
-                        {formatCurrency(datos.total ?? 0)}
-                      </div>
+                      <label htmlFor="ed-total" className="label-section block mb-1.5">Total Factura (DOP$)</label>
+                      <input
+                        id="ed-total"
+                        type="number"
+                        className="input-field font-bold text-sm"
+                        value={datos.total ?? ""}
+                        onChange={(e) => setDatos({ ...datos, total: parseFloat(e.target.value) || 0 })}
+                      />
                     </div>
                   </div>
+                  {savedOk ? (
+                    <div className="flex items-center gap-2 text-success text-sm font-semibold pt-1">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                      </svg>
+                      Correcciones guardadas
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSaveCorrections}
+                      disabled={saving}
+                      className="btn-secondary w-full py-2.5 text-sm flex items-center justify-center gap-2"
+                    >
+                      {saving ? (
+                        <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                        </svg>
+                      )}
+                      Guardar correcciones
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-10 text-on-surface-faint">

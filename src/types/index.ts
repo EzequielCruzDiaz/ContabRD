@@ -1,6 +1,25 @@
 export type Plan = "basico" | "pro" | "enterprise";
 export type RolUsuario = "admin" | "contador" | "usuario";
 export type EstadoFactura = "pendiente" | "registrado" | "error";
+export type EstadoDeclaracion = "pendiente" | "enviada" | "aceptada" | "rechazada";
+export type TipoDeclaracion = "IT-1" | "IR-17" | "IR-2" | "606" | "607" | "TSS";
+
+export interface AsientoLinea {
+  cuenta: string;
+  debito: number | null;
+  credito: number | null;
+}
+
+export interface DatosFacturaExtraidos {
+  rnc_proveedor?: string;
+  ncf?: string;
+  proveedor?: string;
+  fecha_factura?: string;
+  subtotal?: number;
+  itbis?: number;
+  total?: number;
+  asiento_contable?: AsientoLinea[];
+}
 
 export interface Empresa {
   id: string;
@@ -56,7 +75,7 @@ export interface Declaracion {
   periodo_anio: number | null;
   fecha_envio: string | null;
   fecha_vencimiento: string | null;
-  estado: string;
+  estado: EstadoDeclaracion;
   numero_confirmacion: string | null;
   monto_declarado: number | null;
   notas: string | null;

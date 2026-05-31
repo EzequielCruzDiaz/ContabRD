@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useSidebar } from "./DashboardShell";
 
 const navItems = [
   {
@@ -53,8 +54,9 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const pathname = usePathname();
-  const router   = useRouter();
+  const pathname    = usePathname();
+  const router      = useRouter();
+  const { open, close } = useSidebar();
 
   async function handleLogout() {
     const supabase = createClient();
@@ -64,7 +66,10 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar fixed inset-y-0 left-0 z-30 transition-transform duration-300
+      ${open ? "translate-x-0" : "-translate-x-full"}
+      lg:translate-x-0`}
+    >
       {/* Brand */}
       <div className="mb-10">
         <h1 className="font-display font-bold text-xl tracking-tight text-primary">QFiscal</h1>
@@ -82,6 +87,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={close}
               className={`sidebar-item ${active ? "sidebar-item-active" : ""}`}
             >
               {item.icon}
