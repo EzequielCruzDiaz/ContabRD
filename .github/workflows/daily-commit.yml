@@ -1,0 +1,28 @@
+name: Daily Activity
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # Runs every day at 12:00 UTC (8am RD)
+  workflow_dispatch:        # Also allows manual trigger from GitHub UI
+
+jobs:
+  commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update activity log
+        run: |
+          mkdir -p .github/activity
+          echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') — daily build check" >> .github/activity/log.txt
+
+      - name: Commit and push
+        run: |
+          git config user.name  "ezequiel"
+          git config user.email "ezequielcruz018@gmail.com"
+          git add .github/activity/log.txt
+          git diff --cached --quiet || git commit -m "chore: daily activity $(date -u '+%Y-%m-%d')"
+          git push
