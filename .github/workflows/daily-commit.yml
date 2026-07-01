@@ -2,11 +2,11 @@ name: Daily Activity
 
 on:
   schedule:
-    # Runs every other day at a varied time (Mon, Wed, Fri, Sun)
-    - cron: "0 13 * * 1"   # Monday    1pm UTC
-    - cron: "0 15 * * 3"   # Wednesday 3pm UTC
-    - cron: "0 11 * * 5"   # Friday    11am UTC
-    - cron: "0 14 * * 0"   # Sunday    2pm UTC
+    - cron: "0 13 * * 1"   # Lunes     1pm UTC
+    - cron: "0 15 * * 2"   # Martes    3pm UTC
+    - cron: "0 11 * * 3"   # Miércoles 11am UTC
+    - cron: "0 14 * * 5"   # Viernes   2pm UTC
+    - cron: "0 12 * * 6"   # Sábado    12pm UTC
   workflow_dispatch:
 
 jobs:
@@ -20,13 +20,15 @@ jobs:
 
       - name: Make varied commits
         run: |
-          git config user.name  "ezequiel"
-          git config user.email "ezequielcruz018@gmail.com"
+          # Usar el email noreply de GitHub — garantizado vinculado a la cuenta
+          git config user.name  "${{ github.actor }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+
           mkdir -p .github/activity
 
-          # Random number of commits between 1 and 7
-          COUNT=$(( (RANDOM % 7) + 1 ))
-          echo "Making $COUNT commits today"
+          # Entre 2 y 8 commits por ejecución
+          COUNT=$(( (RANDOM % 7) + 2 ))
+          echo "Haciendo $COUNT commits"
 
           MESSAGES=(
             "chore: update dependencies check"
@@ -41,15 +43,21 @@ jobs:
             "chore: daily review"
             "chore: check integrations"
             "fix: lint pass"
+            "chore: update changelog"
+            "fix: code style"
+            "chore: dependency audit"
+            "fix: minor refactor"
+            "chore: build verification"
+            "fix: cleanup unused vars"
           )
 
           for i in $(seq 1 $COUNT); do
-            sleep 1
+            sleep 2
             TS=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
-            MSG_INDEX=$(( (RANDOM % ${#MESSAGES[@]}) ))
-            echo "$TS — ${MESSAGES[$MSG_INDEX]}" >> .github/activity/log.txt
+            IDX=$(( RANDOM % ${#MESSAGES[@]} ))
+            echo "$TS — ${MESSAGES[$IDX]}" >> .github/activity/log.txt
             git add .github/activity/log.txt
-            git commit -m "${MESSAGES[$MSG_INDEX]} ($TS)"
+            git commit -m "${MESSAGES[$IDX]}"
           done
 
           git push
